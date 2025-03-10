@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECG Synchronization Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  <!-- Include Chart.js -->
+    <style>
+        body {
+            transition: background-color 0.5s ease;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #data-container {
+            font-size: 20px;
+            font-weight: bold;
+            color: black;
+            margin-top: 20px;
+        }
+        canvas {
+            max-width: 800px;
+            margin: 20px auto;
+            display: block;
+        }
+        .heart {
+            position: absolute;
+            font-size: 40px;
+            color: red;
+            animation: floatUp 2s linear infinite;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0px); opacity: 1; }
+            100% { transform: translateY(-100px); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Heart Synchronization Visualization</h1>
+    <p>Heart effects will appear when synchronization is high ❤️</p>
+    <div id="data-container">Waiting for data...</div>
+
+    <canvas id="correlationChart"></canvas>  <!-- Graph Container -->
+
+    <script>
+        let ws = new WebSocket("ws://127.0.0.1:8000/ws");  // Connect to WebSocket Server
+
+        let ctx = document.getElementById('correlationChart').getContext('2d');
+        let correlationChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],  // Time (in seconds)
+                datasets: [{
+                    label: 'Synchronization Percentage',
+                    data: [],
+                    borderColor: 'red',
+                    borderWidth: 2,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { title: { display: true, text: "Time (s)" } },
+                    y: { title: { display: true, text: "Synchronization Percentage" }, min: 0, max: 1 }
+                }
+            }
+        });
+
+        ws.onmessage = function(event) {
+            let data;
+            try {
+                data = JSON.parse(event.data);
+            } catch (error) {
+                console.error("Failed to parse JSON:", error);
+                return;
+            }
+
+            if (!("max_correlation" in data)) {
+                console.error("Error: Missing 'max_correlation' in received data.", data);
+                return;
+            }
+
+            let maxCorrelation = data.max_correlation;
+            let time = data.time;
+
+            console.log(`Time: ${time}s - Synchronization: ${maxCorrelation}`);
+
+            // Update the correlation value display
+            let dataContainer = document.getElementById("data-container");
+            if (dataContainer) {
+                dataContainer.innerHTML = `Time: ${time}s - Synchronization: ${(maxCorrelation * 100).toFixed(2)}%`;
+            }
+
+            // Update the graph
+            correlationChart.data.labels.push(time);
+            correlationChart.data.datasets[0].data.push(maxCorrelation);
+            correlationChart.update();
+
+            // Change background color based on correlation
+            if (maxCorrelation > 0.5) {
+                document.body.style.backgroundColor = "pink";  // Soft pink when synchronized
+                createHeartEffect();  // Trigger heart emoji effect
+            } else {
+                document.body.style.backgroundColor = "white";
+            }
+        };
+
+        ws.onerror = function (error) {
+            console.error("WebSocket Error:", error);
+        };
+
+        ws.onclose = function () {
+            console.log("WebSocket Disconnected");
+        };
+
+        // Function to create floating heart effects
+        function createHeartEffect() {
+            let heart = document.createElement("div");
+            heart.classList.add("heart");
+            heart.innerHTML = "❤️";
+            document.body.appendChild(heart);
+
+            let x = Math.random() * window.innerWidth;  // Random x position
+            heart.style.left = `${x}px`;
+            heart.style.top = `${window.innerHeight - 50}px`;
+
+            setTimeout(() => {
+                heart.remove();  // Remove heart after animation ends
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
