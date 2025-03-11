@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Heart Synchronization</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  <!-- Include Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             transition: background-color 0.5s ease;
@@ -18,15 +18,6 @@
             margin-top: 20px;
             color: black;
         }
-        canvas {
-            max-width: 800px;
-            height: 400px;
-            margin: 20px auto;
-            display: block;
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 10px;
-            padding: 10px;
-        }
         .heart {
             position: absolute;
             font-size: 40px;
@@ -38,12 +29,34 @@
             0% { transform: translateY(0px); opacity: 1; }
             100% { transform: translateY(-100px); opacity: 0; }
         }
+        .heartbeat-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            font-size: 20px;
+            margin: 10px;
+        }
+        canvas {
+            max-width: 800px;
+            height: 400px;
+            margin: 20px auto;
+            display: block;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            padding: 10px;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Heart Synchronization Graph ❤️</h1>
-    <canvas id="correlationChart"></canvas>  <!-- The Graph -->
+    <h1>Heart Synchronization ❤️</h1>
+
+    <div class="heartbeat-container">
+        <p>💙 Heart Rate (Person 1): <span id="heart-rate-1">--</span> BPM</p>
+        <p>❤️ Heart Rate (Person 2): <span id="heart-rate-2">--</span> BPM</p>
+    </div>
+
+    <canvas id="correlationChart"></canvas>  <!-- Graph Container -->
 
     <script>
         let ws = new WebSocket("ws://127.0.0.1:8000/ws");  // Connect to WebSocket Server
@@ -52,30 +65,44 @@
         let correlationChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: [],  // Time in seconds (hidden)
-                datasets: [{
-                    label: 'Synchronization Percentage',
-                    data: [],
-                    borderColor: 'red',
-                    borderWidth: 2,
-                    fill: false,
-                    pointRadius: 3,  // Show small dots at data points
-                    pointBackgroundColor: "black"  // Make points easier to see
-                }]
+                labels: [],  // Time (s)
+                datasets: [
+                    {
+                        label: 'Heart Rate - Person 1',
+                        data: [],
+                        borderColor: 'blue',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 3,
+                        pointBackgroundColor: "blue"
+                    },
+                    {
+                        label: 'Heart Rate - Person 2',
+                        data: [],
+                        borderColor: 'red',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 3,
+                        pointBackgroundColor: "red"
+                    },
+                    {
+                        label: 'Synchronization Percentage',
+                        data: [],
+                        borderColor: 'black',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 3,
+                        pointBackgroundColor: "black"
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 scales: {
                     x: { title: { display: true, text: "Time (s)", color: "black" } },
-                    y: { 
-                        title: { display: true, text: "Synchronization Percentage", color: "black" }, 
-                        min: 0, 
-                        max: 1 
-                    }
+                    y: { min: 0, max: 1 }
                 },
-                plugins: {
-                    legend: { display: true }
-                }
+                plugins: { legend: { display: true } }
             }
         });
 
@@ -88,23 +115,31 @@
                 return;
             }
 
-            if (!("max_correlation" in data)) {
-                console.error("Error: Missing 'max_correlation' in received data.", data);
+            if (!("correlation" in data)) {
+                console.error("Error: Missing data fields in received data.", data);
                 return;
             }
 
-            let maxCorrelation = data.max_correlation;
             let time = data.time;
+            let heartRate1 = data.heart_rate_1;
+            let heartRate2 = data.heart_rate_2;
+            let correlation = data.correlation;
 
-            console.log(`Synchronization: ${(maxCorrelation * 100).toFixed(2)}%`);
+            console.log(`Time: ${time}s - Heart1: ${heartRate1}, Heart2: ${heartRate2}, Sync: ${(correlation * 100).toFixed(2)}%`);
+
+            // Update the heart rate display
+            document.getElementById("heart-rate-1").innerText = heartRate1;
+            document.getElementById("heart-rate-2").innerText = heartRate2;
 
             // Update the graph
             correlationChart.data.labels.push(time);
-            correlationChart.data.datasets[0].data.push(maxCorrelation);
+            correlationChart.data.datasets[0].data.push(heartRate1);
+            correlationChart.data.datasets[1].data.push(heartRate2);
+            correlationChart.data.datasets[2].data.push(correlation);
             correlationChart.update();
 
             // Trigger heart effect when synchronization is high
-            if (maxCorrelation > 0.5) {
+            if (correlation > 0.75) {
                 document.body.style.backgroundColor = "pink";  // Soft pink when synchronized
                 createHeartEffect();
             } else {
@@ -112,28 +147,17 @@
             }
         };
 
-        ws.onerror = function (error) {
-            console.error("WebSocket Error:", error);
-        };
-
-        ws.onclose = function () {
-            console.log("WebSocket Disconnected");
-        };
-
-        // Function to create floating heart effects
         function createHeartEffect() {
             let heart = document.createElement("div");
             heart.classList.add("heart");
             heart.innerHTML = "❤️";
             document.body.appendChild(heart);
 
-            let x = Math.random() * (window.innerWidth * 0.8) + (window.innerWidth * 0.1);  // Keep hearts in the middle
+            let x = Math.random() * (window.innerWidth * 0.8) + (window.innerWidth * 0.1);  
             heart.style.left = `${x}px`;
             heart.style.top = `${window.innerHeight - 50}px`;
 
-            setTimeout(() => {
-                heart.remove();  // Remove heart after animation ends
-            }, 2000);
+            setTimeout(() => { heart.remove(); }, 2000);
         }
     </script>
 </body>
